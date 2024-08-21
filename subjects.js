@@ -35,16 +35,25 @@ let add= (request, response) => {
 };
 
 let select = (request, response) => {
-  let query = `SELECT * FROM subjects`;
-  connection.DB.query(query, (err, result) => {  
-    if(err != null){
-        response.json("[{'error':'error occured'}")
-    }
-    else{
-        response.json(result);
-    } 
-});
-}
+    let query = `
+        SELECT s.id, s.course_id, s.title, s.rate, c.title AS course_title
+        FROM subjects s
+        JOIN courses c ON s.course_id = c.id
+    `;
+    
+    connection.DB.query(query, (err, result) => {  
+        if (err) {
+            response.json({
+                error: 'error occurred',
+                message: 'Error occurred while fetching subjects'
+            });
+        } else {
+            response.json({
+                subjects: result // Update key to match the frontend expectations
+            });
+        }
+    });
+};
 
 let update = (request, response) => {
     let {id} = request.params;
@@ -119,9 +128,33 @@ let deleteSubject = (request, response) => {
         }
     });
 }
-
+let getsubject = (request, response) => {
+    let { id } = request.params;
+    id = connection.DB.escape(id);
+    let query = `SELECT * FROM subjects WHERE id = ${id}`;
+    connection.DB.query(query, (err, result) => {
+        if (err) {
+            response.json({
+                error: 'no',
+                success: 'no',
+                message: 'Error occurred while fetching data'
+            });
+        } else {
+            if (result.length === 0) {
+                response.json({
+                    error: 'no',
+                    success: 'no',
+                    message: 'Subject not found'
+                });
+            } else {
+                response.json(result[0]);
+            }
+        }
+    });
+}
 
 module.exports.add = add
 module.exports.select = select
 module.exports.update = update
 module.exports.deleteSubject = deleteSubject
+module.exports.getsubject = getsubject

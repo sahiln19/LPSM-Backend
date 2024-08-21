@@ -2,9 +2,9 @@ var connection = require('./connection');
 var commoncode = require('./commoncode');
 
 let add = (request, response) => {
-    let requiredFields = ['course_id', 'start_date', 'end_date', 'class_time'];
+    let requiredFields = ['batch_name', 'course_id', 'start_date', 'end_date', 'class_time'];
     let missingFields = commoncode.getMissingFields(request.body, requiredFields);
-    
+
     if (missingFields.length > 0) {
         response.json({
             error: 'yes',
@@ -13,24 +13,20 @@ let add = (request, response) => {
         });
         return;
     }
-    
-    let { course_id, start_date, end_date, class_time } = request.body;
-    
-    // // Escape values to prevent SQL injection
-    course_id = connection.DB.escape(course_id);
-    start_date = connection.DB.escape(start_date);
-    end_date = connection.DB.escape(end_date);
-    class_time = connection.DB.escape(class_time);
-    
-    let query = `INSERT INTO batches (course_id, start_date, end_date, class_time) VALUES (${course_id}, ${start_date}, ${end_date}, ${class_time})`;
-    
-    connection.DB.query(query, (err, result) => {
+
+    let { batch_name, course_id, start_date, end_date, class_time } = request.body;
+
+    // Use parameterized query to avoid SQL injection
+    let query = `INSERT INTO batches (batch_name, course_id, start_date, end_date, class_time) VALUES (?, ?, ?, ?, ?)`;
+    let values = [batch_name, course_id, start_date, end_date, class_time];
+
+    connection.DB.query(query, values, (err, result) => {
         if (err) {
             if (err.code === 'ER_DUP_ENTRY') {
                 response.json({
                     error: 'yes',
                     success: 'no',
-                    message: 'Subject already exists'
+                    message: 'Batch already exists'
                 });
             } else {
                 response.json({
@@ -44,14 +40,19 @@ let add = (request, response) => {
             response.json({
                 error: 'no',
                 success: 'yes',
-                message: 'Subject added successfully'
+                message: 'Batch added successfully'
             });
         }
     });
 };
 
 let select = (request, response) => {
-    let query = `SELECT * FROM batches`;
+    let query = `
+        SELECT b.id,b.batch_name, b.course_id, b.start_date, b.end_date, b.class_time, c.title AS course_title
+       FROM batches b
+       JOIN courses c ON b.course_id = c.id
+ 
+    `;
     
     connection.DB.query(query, (err, result) => {
         if (err) {
@@ -60,49 +61,45 @@ let select = (request, response) => {
                 message: 'Error occurred'
             });
         } else {
-            response.json(result);
+            response.json({
+                batches: result // Update key to match the frontend expectations
+            });
         }
-    }  );
-}
-let update = (request, response) => {   
-    let {id} = request.params;
-    let {start_date, end_date, class_time} = request.body;
-    let requiredFields = ['start_date', 'end_date', 'class_time'];
-    let missingFields = commoncode.getMissingFields(request.body, requiredFields);
-    if(missingFields.length > 0){
-        response.json({
-            error : 'yes',
-            success :'no',
-            message : `Missing fields: ${missingFields.join(', ')}`
-        });
-        return;
-    }
+    });
+};
+
+let update = (request, response) => {
+    let { id } = request.params;
+    let { batch_name, start_date, end_date, class_time } = request.body;
     
-    // Sanitize inputs to prevent SQL injection
-    
+    console.log("Received data:", {batch_name, start_date, end_date, class_time }); // Log received data
+  
+    // Sanitize inputs
     start_date = connection.DB.escape(start_date);
     end_date = connection.DB.escape(end_date);
     class_time = connection.DB.escape(class_time);
     
-    let query = `UPDATE batches SET start_date = ${start_date}, end_date = ${end_date}, class_time = ${class_time} WHERE id = ${id}`;
+    let query = `UPDATE batches SET batch_name = ${batch_name}, start_date = ${start_date}, end_date = ${end_date}, class_time = ${class_time} WHERE id = ${id}`;
     
     connection.DB.query(query, (err, result) => {
-        if(err){
-            response.json({
-                error : 'yes',
-                success :'no',
-                message : 'Something went wrong, please try again'
-            });
-            console.error(err);
-        } else {
-            response.json({
-                error : 'no',
-                success :'yes',
-                message : 'Batch updated successfully'
-            });
-        }
+      if (err) {
+        response.json({
+          error: 'yes',
+          success: 'no',
+          message: 'Something went wrong, please try again'
+        });
+        console.error(err);
+      } else {
+        response.json({
+          error: 'no',
+          success: 'yes',
+          message: 'Batch updated successfully'
+        });
+      }
     });
-}
+  }
+  
+  
 let deleteBatch = (request, response) => {
     let { id } = request.params;
     let query = `DELETE FROM batches WHERE id = ${id}`;
@@ -131,8 +128,29 @@ let deleteBatch = (request, response) => {
         }
     });
 }
-
+let getbatch = (request, response) => {
+    let { id } = request.params;
+    let query = `SELECT * FROM batches WHERE id = ${id}`;
+    connection.DB.query(query, (err, result) => {
+        if (err) {
+            response.json({
+                error: 'yes',
+                message: 'Error occurred'
+            });
+        } else {
+            if (result.length === 0) {
+                response.json({
+                    error: 'yes',
+                    message: 'Batch not found'
+                });
+            } else {
+                response.json(result[0]);
+            }
+        }
+    });
+}
 module.exports.add = add;
 module.exports.select = select;
 module.exports.update = update;
 module.exports.deleteBatch = deleteBatch;
+module.exports.getbatch = getbatch;
